@@ -174,7 +174,7 @@ struct VideoOptions : public Options
 			 "Write output to a circular buffer of the given size (in MB) which is saved on exit")
 			("frames", value<unsigned int>(&frames)->default_value(0),
 			 "Run for the exact number of frames specified. This will override any timeout set.")
-			 ("drawtext", boost::program_options::value<std::vector<std::string>>(&raw_drawtext_options)->multitoken()->composing(),
+			("drawtext", boost::program_options::value<std::vector<std::string>>(&raw_drawtext_options)->multitoken()->composing(),
 				"Add text overlay using syntax like text='Hello':x=10:y=20:fontsize=14:fontcolor=white:borderw=2")
 #if LIBAV_PRESENT
 			("libav-video-codec", value<std::string>(&libav_video_codec)->default_value("h264_v4l2m2m"),
@@ -306,6 +306,14 @@ struct VideoOptions : public Options
 		else
 			throw std::runtime_error("incorrect sync value " + sync_);
 
+		// Parse raw_drawtext_options into usable DrawTextElement structs
+		for (const std::string &raw : raw_drawtext_options)
+		{
+			DrawTextElement elem;
+			elem.raw_string = raw;
+			elem.parse();
+			drawtext_elements.push_back(std::move(elem));
+		}			
 		return true;
 	}
 	virtual void Print() const override
