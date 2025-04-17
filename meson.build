@@ -19,11 +19,12 @@ cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new', '-I/usr/
 # Needed for file sizes > 32-bits.
 cpp_arguments += '-D_FILE_OFFSET_BITS=64'
 
-libyuv_dep = cc.find_library('yuv', required: true)
-
+cc = meson.get_compiler('c')
 cxx = meson.get_compiler('cpp')
 cpu = host_machine.cpu()
 neon = get_option('neon_flags')
+
+libyuv_dep = cc.find_library('yuv', required: true)
 
 if cxx.get_id() == 'gcc'
     cpp_arguments += '-Wno-psabi'
