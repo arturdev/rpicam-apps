@@ -62,56 +62,57 @@ static int get_colourspace_flags(std::string const &codec)
 		return RPiCamEncoder::FLAG_VIDEO_NONE;
 }
 
-static void apply_overlay_to_frame(VideoOptions const *options, RPiCamEncoder &app, CompletedRequestPtr &completed_request)
+static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &app, CompletedRequestPtr &completed_request)
 {
 	if (options->drawtext_elements.empty())
 		return;
 
 	libcamera::Stream *stream = app.VideoStream();
-	libcamera::FrameBuffer *buffer = completed_request->buffers[stream].get();
-	libcamera::Span span = app.RPiCamApp::Mmap(buffer)[0]; // use qualified name
-		
-	int width = info.width;
-	int height = info.height;
+	libcamera::FrameBuffer *buffer = completed_request->buffers[stream];
+
+	auto it = app.frame_buffers_.find(buffer);
+	if (it == app.frame_buffers_.end())
+		return;
+
+	const std::vector<libcamera::Span<uint8_t>> &mem = it->second;
+	if (mem.size() < 3)
+		return;
+
+	// Get image size from stream config
+	libcamera::Size size = stream->configuration().size;
+	int width = size.width;
+	int height = size.height;
 	int stride = width * 4;
 
 	std::vector<uint8_t> rgb_frame(stride * height);
 
-	// Convert YUV420 to ARGB
+	// Convert YUV to ARGB
 	libyuv::I420ToARGB(
-		span.data(),                     // Y
-		width,                           // Y stride
-		span.data() + width * height,   // U
-		width / 2,                       // U stride
-		span.data() + width * height + (width / 2) * (height / 2), // V
-		width / 2,                       // V stride
-		rgb_frame.data(),                // Output ARGB
-		stride,                          // Output stride
-		width,
-		height
+		mem[0].data(), width,
+		mem[1].data(), width / 2,
+		mem[2].data(), width / 2,
+		rgb_frame.data(), stride,
+		width, height
 	);
 
-	// Draw overlay using Cairo
+	// Draw overlay (dynamic text, timestamp, etc.)
 	render_drawtext_elements(rgb_frame.data(), width, height, stride, options->drawtext_elements);
 
 	// Convert ARGB back to YUV420
-	std::vector<uint8_t> yuv_frame(span.size());
+	std::vector<uint8_t> yuv_frame(mem[0].size() + mem[1].size() + mem[2].size());
 
 	libyuv::ARGBToI420(
-		rgb_frame.data(),                // Input ARGB
-		stride,                          // Input stride
-		yuv_frame.data(),                // Y
-		width,
-		yuv_frame.data() + width * height, // U
-		width / 2,
-		yuv_frame.data() + width * height + (width / 2) * (height / 2), // V
-		width / 2,
-		width,
-		height
+		rgb_frame.data(), stride,
+		yuv_frame.data(), width,
+		yuv_frame.data() + width * height, width / 2,
+		yuv_frame.data() + width * height + (width / 2) * (height / 2), width / 2,
+		width, height
 	);
 
-	// Copy YUV back into span for encoding
-	std::memcpy(span.data(), yuv_frame.data(), span.size());
+	// Copy the YUV data back to the mapped spans
+	std::memcpy(mem[0].data(), yuv_frame.data(), mem[0].size());
+	std::memcpy(mem[1].data(), yuv_frame.data() + mem[0].size(), mem[1].size());
+	std::memcpy(mem[2].data(), yuv_frame.data() + mem[0].size() + mem[1].size(), mem[2].size());
 }
 
 // The main even loop for the application.
