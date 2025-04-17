@@ -35,6 +35,9 @@ endif
 
 dl_dep = dependency('dl', required : true)
 libcamera_dep = dependency('libcamera', required : true)
+cairo_dep    = dependency('cairo',        required : true)
+pango_dep    = dependency('pangocairo',   required : true)
+libyuv_dep   = dependency('yuv',          required : true)
 
 summary({
             'location' : libcamera_dep.get_variable('libdir'),
@@ -43,7 +46,7 @@ summary({
         section : 'libcamera')
 
 rpicam_app_src = []
-rpicam_app_dep = [libcamera_dep, dl_dep]
+rpicam_app_dep = [libcamera_dep, dl_dep, cairo_dep, pango_dep, libyuv_dep]
 
 subdir('core')
 subdir('encoder')
