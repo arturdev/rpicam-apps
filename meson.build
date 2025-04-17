@@ -14,7 +14,7 @@ meson.add_dist_script('utils' / 'gen-dist.sh')
 
 fs = import('fs')
 
-cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new']
+cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new', '-I/usr/include/freetype2']
 
 # Needed for file sizes > 32-bits.
 cpp_arguments += '-D_FILE_OFFSET_BITS=64'
