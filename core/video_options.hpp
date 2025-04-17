@@ -9,9 +9,61 @@
 
 #include <cstdio>
 
+#include <map>
+
+#include <sstream>
 #include <string>
 
+#include <vector>
+
 #include "options.hpp"
+
+inline std::string unquote(const std::string &s) {
+	if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+		return s.substr(1, s.size() - 2);
+	return s;
+}
+
+inline bool fileExists(const std::string &path) {
+	std::ifstream f(path.c_str());
+	return f.good();
+}
+
+struct DrawTextElement
+{
+	std::string raw_string; // full original string
+	std::string text_template; // e.g. 'Hello %{localtime:%H:%M:%S}'
+	std::string fontfile = "";
+	std::string fontcolor = "white";
+	std::string bordercolor = "black";
+	int fontsize = 12;
+	int borderw = 0;
+	int x = 0;
+	int y = 0;
+
+	void parse()
+	{
+		std::istringstream stream(raw_string);
+		std::string segment;
+		while (std::getline(stream, segment, ':')) {
+			auto sep = segment.find('=');
+			if (sep == std::string::npos)
+				continue;
+	
+			std::string key = segment.substr(0, sep);
+			std::string value = segment.substr(sep + 1);
+	
+			if (key == "text") text_template = unquote(value);
+			else if (key == "x") x = std::stoi(value);
+			else if (key == "y") y = std::stoi(value);
+			else if (key == "fontsize") fontsize = std::stoi(value);
+			else if (key == "fontcolor") fontcolor = value;
+			else if (key == "bordercolor") bordercolor = value;
+			else if (key == "borderw") borderw = std::stoi(value);
+			else if (key == "fontfile") fontfile = unquote(value);
+		}
+	}
+};
 
 struct Bitrate
 {
@@ -122,6 +174,8 @@ struct VideoOptions : public Options
 			 "Write output to a circular buffer of the given size (in MB) which is saved on exit")
 			("frames", value<unsigned int>(&frames)->default_value(0),
 			 "Run for the exact number of frames specified. This will override any timeout set.")
+			 ("drawtext", boost::program_options::value<std::vector<std::string>>(&raw_drawtext_options)->multitoken()->composing(),
+				"Add text overlay using syntax like text='Hello':x=10:y=20:fontsize=14:fontcolor=white:borderw=2")
 #if LIBAV_PRESENT
 			("libav-video-codec", value<std::string>(&libav_video_codec)->default_value("h264_v4l2m2m"),
 			 "Sets the libav video codec to use. "
@@ -197,7 +251,9 @@ struct VideoOptions : public Options
 	uint32_t frames;
 	bool low_latency;
 	uint32_t sync;
-
+	std::vector<std::string> raw_drawtext_options; // original CLI strings
+	std::vector<DrawTextElement> drawtext_elements; // parsed into this later
+	
 	virtual bool Parse(int argc, char *argv[]) override
 	{
 		if (Options::Parse(argc, argv) == false)

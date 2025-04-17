@@ -6,11 +6,13 @@
  */
 
 #include <chrono>
+#include <libyuv.h>
 #include <poll.h>
 #include <signal.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 
+#include "core/drawtext_renderer.hpp"
 #include "core/rpicam_encoder.hpp"
 #include "output/output.hpp"
 
@@ -58,6 +60,58 @@ static int get_colourspace_flags(std::string const &codec)
 		return RPiCamEncoder::FLAG_VIDEO_JPEG_COLOURSPACE;
 	else
 		return RPiCamEncoder::FLAG_VIDEO_NONE;
+}
+
+static void apply_overlay_to_frame(VideoOptions const *options, RPiCamEncoder &app, CompletedRequestPtr &completed_request)
+{
+	if (options->drawtext_elements.empty())
+		return;
+
+	StreamInfo info = app.VideoStream();
+	libcamera::FrameBuffer *buffer = completed_request->buffers[info.stream()].get();
+	libcamera::Span span = app.Mmap(buffer)[0];
+
+	int width = info.width;
+	int height = info.height;
+	int stride = width * 4;
+
+	std::vector<uint8_t> rgb_frame(stride * height);
+
+	// Convert YUV420 to ARGB
+	libyuv::I420ToARGB(
+		span.data(),                     // Y
+		width,                           // Y stride
+		span.data() + width * height,   // U
+		width / 2,                       // U stride
+		span.data() + width * height + (width / 2) * (height / 2), // V
+		width / 2,                       // V stride
+		rgb_frame.data(),                // Output ARGB
+		stride,                          // Output stride
+		width,
+		height
+	);
+
+	// Draw overlay using Cairo
+	render_drawtext_elements(rgb_frame.data(), width, height, stride, options->drawtext_elements);
+
+	// Convert ARGB back to YUV420
+	std::vector<uint8_t> yuv_frame(span.size());
+
+	libyuv::ARGBToI420(
+		rgb_frame.data(),                // Input ARGB
+		stride,                          // Input stride
+		yuv_frame.data(),                // Y
+		width,
+		yuv_frame.data() + width * height, // U
+		width / 2,
+		yuv_frame.data() + width * height + (width / 2) * (height / 2), // V
+		width / 2,
+		width,
+		height
+	);
+
+	// Copy YUV back into span for encoding
+	std::memcpy(span.data(), yuv_frame.data(), span.size());
 }
 
 // The main even loop for the application.
@@ -118,6 +172,7 @@ static void event_loop(RPiCamEncoder &app)
 			return;
 		}
 		CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
+		apply_overlay_to_frame(options, app, completed_request);
 		if (!app.EncodeBuffer(completed_request, app.VideoStream()))
 		{
 			// Keep advancing our "start time" if we're still waiting to start recording (e.g.
