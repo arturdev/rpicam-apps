@@ -37,7 +37,7 @@ dl_dep = dependency('dl', required : true)
 libcamera_dep = dependency('libcamera', required : true)
 cairo_dep    = dependency('cairo',        required : true)
 pango_dep    = dependency('pangocairo',   required : true)
-libyuv_dep   = dependency('yuv',          required : true)
+libyuv_dep   = dependency('libyuv',          required : true)
 
 summary({
             'location' : libcamera_dep.get_variable('libdir'),
