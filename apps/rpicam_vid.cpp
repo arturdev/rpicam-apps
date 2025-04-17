@@ -16,6 +16,11 @@
 #include "core/rpicam_encoder.hpp"
 #include "output/output.hpp"
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <libcamera/framebuffer.h>
+
 using namespace std::placeholders;
 
 // Some keypress/signal handling.
@@ -70,20 +75,31 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 	libcamera::Stream *stream = app.VideoStream();
 	libcamera::FrameBuffer *buffer = completed_request->buffers[stream];
 
-	// Use the public mapped buffer access
-	const std::vector<libcamera::Span<uint8_t>> &mem = completed_request->mapped_buffers[stream];
-	if (mem.size() < 3)
+	if (!buffer || buffer->planes().size() < 3)
 		return;
 
-	// Get image dimensions from stream config
-	libcamera::Size size = stream->configuration().size;
+	const libcamera::Size size = stream->configuration().size;
 	int width = size.width;
 	int height = size.height;
 	int stride = width * 4;
 
+	// Allocate RGB buffer for drawing
 	std::vector<uint8_t> rgb_frame(stride * height);
 
-	// Convert YUV to ARGB
+	// mmap each plane
+	std::vector<libcamera::Span<uint8_t>> mem;
+	for (const auto &plane : buffer->planes())
+	{
+		void *vaddr = mmap(nullptr, plane.length, PROT_READ | PROT_WRITE, MAP_SHARED, plane.fd.fd(), 0);
+		if (vaddr == MAP_FAILED)
+		{
+			perror("mmap failed");
+			return;
+		}
+		mem.emplace_back(static_cast<uint8_t *>(vaddr), plane.length);
+	}
+
+	// Convert YUV → ARGB
 	libyuv::I420ToARGB(
 		mem[0].data(), width,
 		mem[1].data(), width / 2,
@@ -92,10 +108,10 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 		width, height
 	);
 
-	// Render overlay text into ARGB buffer
+	// Draw overlay into ARGB buffer
 	render_drawtext_elements(rgb_frame.data(), width, height, stride, options->drawtext_elements);
 
-	// Convert ARGB back to YUV
+	// Convert back: ARGB → YUV420
 	std::vector<uint8_t> yuv_frame(mem[0].size() + mem[1].size() + mem[2].size());
 
 	libyuv::ARGBToI420(
@@ -106,10 +122,14 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 		width, height
 	);
 
-	// Copy back into the mapped spans
+	// Copy data back into memory
 	std::memcpy(mem[0].data(), yuv_frame.data(), mem[0].size());
 	std::memcpy(mem[1].data(), yuv_frame.data() + mem[0].size(), mem[1].size());
 	std::memcpy(mem[2].data(), yuv_frame.data() + mem[0].size() + mem[1].size(), mem[2].size());
+
+	// Unmap memory
+	for (size_t i = 0; i < mem.size(); ++i)
+		munmap(mem[i].data(), mem[i].size());
 }
 
 // The main even loop for the application.
