@@ -90,7 +90,7 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 	std::vector<libcamera::Span<uint8_t>> mem;
 	for (const auto &plane : buffer->planes())
 	{
-		void *vaddr = mmap(nullptr, plane.length, PROT_READ | PROT_WRITE, MAP_SHARED, plane.fd.fd(), 0);
+		void *vaddr = mmap(nullptr, plane.length, PROT_READ | PROT_WRITE, MAP_SHARED, plane.fd.get(), 0);
 		if (vaddr == MAP_FAILED)
 		{
 			perror("mmap failed");
