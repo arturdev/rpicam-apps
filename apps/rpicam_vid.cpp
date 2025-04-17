@@ -70,15 +70,12 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 	libcamera::Stream *stream = app.VideoStream();
 	libcamera::FrameBuffer *buffer = completed_request->buffers[stream];
 
-	auto it = app.frame_buffers_.find(buffer);
-	if (it == app.frame_buffers_.end())
-		return;
-
-	const std::vector<libcamera::Span<uint8_t>> &mem = it->second;
+	// Use the public mapped buffer access
+	const std::vector<libcamera::Span<uint8_t>> &mem = completed_request->mapped_buffers[stream];
 	if (mem.size() < 3)
 		return;
 
-	// Get image size from stream config
+	// Get image dimensions from stream config
 	libcamera::Size size = stream->configuration().size;
 	int width = size.width;
 	int height = size.height;
@@ -95,10 +92,10 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 		width, height
 	);
 
-	// Draw overlay (dynamic text, timestamp, etc.)
+	// Render overlay text into ARGB buffer
 	render_drawtext_elements(rgb_frame.data(), width, height, stride, options->drawtext_elements);
 
-	// Convert ARGB back to YUV420
+	// Convert ARGB back to YUV
 	std::vector<uint8_t> yuv_frame(mem[0].size() + mem[1].size() + mem[2].size());
 
 	libyuv::ARGBToI420(
@@ -109,7 +106,7 @@ static void apply_overlay_to_frame(const VideoOptions *options, RPiCamEncoder &a
 		width, height
 	);
 
-	// Copy the YUV data back to the mapped spans
+	// Copy back into the mapped spans
 	std::memcpy(mem[0].data(), yuv_frame.data(), mem[0].size());
 	std::memcpy(mem[1].data(), yuv_frame.data() + mem[0].size(), mem[1].size());
 	std::memcpy(mem[2].data(), yuv_frame.data() + mem[0].size() + mem[1].size(), mem[2].size());
