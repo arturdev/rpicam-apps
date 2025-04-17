@@ -6,7 +6,7 @@ rpicam_still = executable('rpicam-still', files('rpicam_still.cpp'),
 
 rpicam_vid = executable('rpicam-vid', files('rpicam_vid.cpp'),
                         include_directories : include_directories('..'),
-                        dependencies: [libcamera_dep, boost_dep],
+                        dependencies: [libcamera_dep, boost_dep, libyuv_dep, cairo_dep, pango_dep],
                         link_with : rpicam_app,
                         install : true)
 
