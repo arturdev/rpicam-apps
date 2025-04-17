@@ -67,10 +67,10 @@ static void apply_overlay_to_frame(VideoOptions const *options, RPiCamEncoder &a
 	if (options->drawtext_elements.empty())
 		return;
 
-	StreamInfo info = app.VideoStream();
-	libcamera::FrameBuffer *buffer = completed_request->buffers[info.stream()].get();
-	libcamera::Span span = app.Mmap(buffer)[0];
-
+	libcamera::Stream *stream = app.VideoStream();
+	libcamera::FrameBuffer *buffer = completed_request->buffers[stream].get();
+	libcamera::Span span = app.RPiCamApp::Mmap(buffer)[0]; // use qualified name
+		
 	int width = info.width;
 	int height = info.height;
 	int stride = width * 4;
