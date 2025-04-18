@@ -138,7 +138,9 @@ void AnnotateCvStage::Configure()
 	{
 		if (annotation.is_static)
 		{
-			std::string text = info_.ToString(annotation.text);
+			// Create a temporary FrameInfo for static text processing
+			FrameInfo info;
+			std::string text = info.ToString(annotation.text);
 			createTextCache(annotation, text);
 		}
 	}
