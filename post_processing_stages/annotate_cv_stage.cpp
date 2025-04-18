@@ -138,10 +138,8 @@ void AnnotateCvStage::Configure()
 	{
 		if (annotation.is_static)
 		{
-			// Create a temporary FrameInfo for static text processing
-			FrameInfo info;
-			std::string text = info.ToString(annotation.text);
-			createTextCache(annotation, text);
+			// For static text, we can use the text directly without FrameInfo
+			createTextCache(annotation, annotation.text);
 		}
 	}
 }
@@ -311,6 +309,9 @@ void AnnotateCvStage::drawAnnotation(Mat &im, TextAnnotation &annotation, const 
 	if (!annotation.is_static)
 	{
 		updateDynamicText(annotation);
+		// For dynamic text, we need to process the template with FrameInfo
+		std::string text = info.ToString(annotation.cached_text);
+		createTextCache(annotation, text);
 	}
 
 	// Copy the cached image to the output frame
